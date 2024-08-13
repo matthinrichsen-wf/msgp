@@ -311,7 +311,19 @@ func (fs *FileSet) getTypeSpecs(f *ast.File) {
 						*ast.StarExpr,
 						*ast.MapType,
 						*ast.Ident:
-						fs.Specs[ts.Name.Name] = ts.Type
+
+						if ts.TypeParams != nil {
+							types := []string{}
+							for _, i := range ts.TypeParams.List {
+								for _, n := range i.Names {
+									types = append(types, n.Name)
+								}
+							}
+							fs.Specs[ts.Name.Name+`[`+strings.Join(types, `,`)+`]`] = ts.Type
+						} else {
+							fs.Specs[ts.Name.Name] = ts.Type
+						}
+
 					}
 				}
 			}
@@ -510,6 +522,7 @@ func stringify(e ast.Expr) string {
 // - *ast.StructType (struct {})
 // - *ast.SelectorExpr (a.B)
 // - *ast.InterfaceType (interface {})
+// - *ast.IndexExpr (type[T])
 func (fs *FileSet) parseExpr(e ast.Expr) gen.Elem {
 	switch e := e.(type) {
 
@@ -595,6 +608,18 @@ func (fs *FileSet) parseExpr(e ast.Expr) gen.Elem {
 			return &gen.BaseElem{Value: gen.Intf}
 		}
 		return nil
+
+	case *ast.IndexExpr:
+		// support `SomeTyhpe[T any]
+		return gen.Ident(stringify(e.X) + `[` + stringify(e.Index) + `]`)
+
+	case *ast.IndexListExpr:
+		// support `SomeTyhpe[T any, U any]
+		types := []string{}
+		for _, i := range e.Indices {
+			types = append(types, stringify(i))
+		}
+		return gen.Ident(stringify(e.X) + `[` + strings.Join(types, `,`) + `]`)
 
 	default: // other types not supported
 		return nil
